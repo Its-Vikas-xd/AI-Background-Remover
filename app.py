@@ -1,19 +1,22 @@
 import os
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request
 from werkzeug.utils import secure_filename
 from rembg import remove
-from PIL import Image
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.config['RESULT_FOLDER'] = 'static/results'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB limit
+app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
+app.config['RESULT_FOLDER'] = '/tmp/results'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.before_first_request
+def create_folders():
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    os.makedirs(app.config['RESULT_FOLDER'], exist_ok=True)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -30,7 +33,6 @@ def index():
             upload_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(upload_path)
             
-            # Process image
             output_filename = f"removed_bg_{filename.split('.')[0]}.png"
             output_path = os.path.join(app.config['RESULT_FOLDER'], output_filename)
             
@@ -40,13 +42,10 @@ def index():
                     output_data = remove(input_data)
                     o.write(output_data)
             
-            return render_template('index.html', 
-                                   original=upload_path, 
-                                   result=output_path)
+            # You cannot display the image from /tmp on Vercel directly.
+            return render_template('index.html', result='Image processed successfully (but file not saved permanently on Vercel).')
     
     return render_template('index.html')
 
-if __name__ == '__main__':
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    os.makedirs(app.config['RESULT_FOLDER'], exist_ok=True)
-    app.run(debug=True)
+def handler(environ, start_response):
+    return app.wsgi_app(environ, start_response)

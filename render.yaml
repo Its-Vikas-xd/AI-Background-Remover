@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: flask-rembg-app
+    name: ai-background-remover
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app

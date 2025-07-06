@@ -481,8 +481,7 @@ if 'result_image' in st.session_state and st.session_state.result_image:
                         linear-gradient(-45deg, transparent 75%, #ccc 75%);
                     background-size: 10px 10px;
                     background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
-                """
-            
+                """    
             # Add border for selected color
             selected = "selected" if st.session_state.selected_color == hex_code else ""
             

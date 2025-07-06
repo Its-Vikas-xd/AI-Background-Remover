@@ -178,7 +178,6 @@ st.markdown(f"""
         }}
     }}
     
-
     h1, h2, h3, h4, h5, h6 {{
         color: #2A2D43 !important;
     }}
@@ -202,6 +201,55 @@ st.markdown(f"""
         background: linear-gradient(135deg, var(--primary) 0%, #7b68ee 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+    }}
+    
+    /* Color options styling */
+    .color-options {{
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        flex-wrap: wrap;
+        margin: 20px 0;
+    }}
+    
+    .color-option {{
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 3px solid transparent;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }}
+    
+    .color-option:hover {{
+        transform: scale(1.1);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    }}
+    
+    .color-option.selected {{
+        border: 3px solid #2A2D43;
+        transform: scale(1.15);
+    }}
+    
+    .color-label {{
+        text-align: center;
+        font-size: 0.8rem;
+        margin-top: 5px;
+        color: #2A2D43;
+    }}
+    
+    .color-preview {{
+        background-color: white;
+        padding: 20px;
+        border-radius: 16px;
+        margin: 20px 0;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }}
+    
+    .color-preview h4 {{
+        margin-bottom: 15px;
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -282,9 +330,43 @@ def remove_background(image):
 # Function to create download link
 def get_image_download_link(img, filename, text):
     buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
+    
+    if img.mode == 'RGBA':
+        img.save(buffered, format="PNG")
+    else:
+        img.save(buffered, format="PNG")
+    
     img_str = base64.b64encode(buffered.getvalue()).decode()
     return f'<a href="data:image/png;base64,{img_str}" download="{filename}" class="download-btn pulse">{text}</a>'
+
+# Function to add colored background
+def add_colored_background(image, color_hex):
+    """Add a colored background to a transparent image"""
+    if color_hex is None:
+        # Return the transparent image as is
+        return image
+    
+    if image.mode != 'RGBA':
+        image = image.convert('RGBA')
+        
+    background = Image.new('RGBA', image.size, color_hex)
+    composite = Image.alpha_composite(background, image)
+    return composite.convert('RGB')
+
+# Initialize session state for color selection
+if 'selected_color' not in st.session_state:
+    st.session_state.selected_color = None
+
+# Define color options (name and hex value)
+COLOR_OPTIONS = {
+    "Transparent": None,
+    "Pure White": "#FFFFFF",
+    "Sky Blue": "#87CEEB",
+    "Lime Green": "#32CD32",
+    "Sunshine Yellow": "#FFD700",
+    "Coral Pink": "#FF7F50",
+    "Lavender": "#E6E6FA"
+}
 
 # File uploader section
 st.markdown("---")
@@ -314,7 +396,7 @@ if uploaded_file is not None:
     
     # Display original image
     st.subheader("Your Image Preview")
-    st.image(uploaded_file, width=400, use_column_width='auto')
+    st.image(uploaded_file, width=400, use_container_width=True)
     
     # Process button
     if st.button("✨ REMOVE BACKGROUND NOW", 
@@ -328,6 +410,9 @@ if uploaded_file is not None:
             if result:
                 st.balloons()
                 st.markdown('<div class="success-badge">✅ BACKGROUND REMOVED SUCCESSFULLY!</div>', unsafe_allow_html=True)
+                
+                # Store result in session state
+                st.session_state.result_image = result
                 
                 # Display comparison
                 st.markdown("## Before & After")
@@ -359,19 +444,96 @@ if uploaded_file is not None:
                     """.format(res=result_str), 
                     unsafe_allow_html=True)
                 
-                # Download button
+                # Download button for transparent version
                 st.markdown(get_image_download_link(
                     result,
                     f"no_bg_{uploaded_file.name.split('.')[0]}.png",
                     "⬇ DOWNLOAD TRANSPARENT PNG"
                 ), unsafe_allow_html=True)
                 
-                # Reset option
-                st.markdown("---")
-                if st.button("🔄 PROCESS ANOTHER IMAGE", 
-                             use_container_width=True,
-                             type="secondary"):
-                    st.experimental_rerun()
+                # Reset selected color
+                st.session_state.selected_color = None
+                
+                # Force a rerun to update color selection UI
+                
+
+# Show color options and preview if we have a processed image
+if 'result_image' in st.session_state and st.session_state.result_image:
+    # Color selection section
+    st.markdown("---")
+    st.markdown("## 🎨 Choose a Background Color")
+    
+    # Create color options
+    st.markdown('<div class="color-options">', unsafe_allow_html=True)
+    cols = st.columns(len(COLOR_OPTIONS))
+    for idx, (color_name, hex_code) in enumerate(COLOR_OPTIONS.items()):
+        with cols[idx]:
+            # Create a colored circle for each option
+            if hex_code:
+                color_style = f"background-color: {hex_code};"
+            else:
+                # Transparent option - checkerboard pattern
+                color_style = """
+                    background: 
+                        linear-gradient(45deg, #ccc 25%, transparent 25%), 
+                        linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #ccc 75%),
+                        linear-gradient(-45deg, transparent 75%, #ccc 75%);
+                    background-size: 10px 10px;
+                    background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+                """
+            
+            # Add border for selected color
+            selected = "selected" if st.session_state.selected_color == hex_code else ""
+            
+            # Use st.button to handle selection
+            if st.button(
+                "",
+                key=f"color_btn_{idx}",
+                help=color_name
+            ):
+                st.session_state.selected_color = hex_code
+               
+                
+            st.markdown(f"""
+                <div class="color-option {selected}" 
+                     style="{color_style}"
+                     onclick="document.querySelector('button[data-testid=\"stButton:color_btn_{idx}\"]').click();">
+                </div>
+                <div class="color-label">{color_name}</div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Preview of selected color
+    if st.session_state.selected_color is not None:
+        st.markdown("### 🖼️ Preview with Selected Background")
+        
+        # Add colored background
+        colored_image = add_colored_background(st.session_state.result_image, st.session_state.selected_color)
+        st.image(colored_image, width=400, use_container_width=True)
+        
+        # Get color name for download button text
+        color_name = [name for name, code in COLOR_OPTIONS.items() if code == st.session_state.selected_color][0]
+        
+        # Download button for colored version
+        st.markdown(get_image_download_link(
+            colored_image,
+            f"colored_bg_{color_name.lower().replace(' ', '_')}_{uploaded_file.name.split('.')[0]}.png",
+            f"⬇ DOWNLOAD WITH {color_name.upper()} BACKGROUND"
+        ), unsafe_allow_html=True)
+    else:
+        st.info("👆 Select a background color to preview")
+    
+    # Reset option
+    st.markdown("---")
+    if st.button("🔄 PROCESS ANOTHER IMAGE", 
+                 use_container_width=True,
+                 type="secondary"):
+        # Clear session state
+        st.session_state.pop('result_image', None)
+        st.session_state.pop('selected_color', None)
+        st.rerun()
 
 # Footer
 st.markdown("""
